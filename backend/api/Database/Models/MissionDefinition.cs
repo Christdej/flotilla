@@ -28,8 +28,7 @@ namespace Api.Database.Models
 
         public virtual MissionRun? LastSuccessfulRun { get; set; }
 
-        [Required]
-        public Area Area { get; set; }
+        public Area? Area { get; set; }
 
         public bool IsDeprecated { get; set; }
     }

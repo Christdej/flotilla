@@ -66,7 +66,7 @@ namespace Api.Services
         {
             var echoMission = await GetEchoMission(sourceMissionId);
 
-            var mission = await EchoMissionToMissionDefinition(echoMission);
+            var mission = await EchoMissionToMissionDefinition(echoMission, loadArea: true);
             return mission;
         }
 
@@ -97,7 +97,7 @@ namespace Api.Services
             return missionTasks;
         }
 
-        private async Task<MissionDefinition?> EchoMissionToMissionDefinition(EchoMission echoMission)
+        private async Task<MissionDefinition?> EchoMissionToMissionDefinition(EchoMission echoMission, bool loadArea = false)
         {
             var source = await sourceService.CheckForExistingSource(echoMission.Id) ?? await sourceService.Create(
                     new Source
@@ -105,27 +105,6 @@ namespace Api.Services
                         SourceId = $"{echoMission.Id}",
                     }
                 );
-            var missionTasks = echoMission.Tags;
-            List<Area?> missionAreas;
-            missionAreas = missionTasks
-                .Where(t => t.TagId != null)
-                .Select(t => stidService.GetTagArea(t.TagId, echoMission.InstallationCode).Result)
-                .ToList();
-
-            var missionDeckNames = missionAreas.Where(a => a != null).Select(a => a!.Deck.Name).Distinct().ToList();
-            if (missionDeckNames.Count > 1)
-            {
-                string joinedMissionDeckNames = string.Join(", ", [.. missionDeckNames]);
-                logger.LogWarning($"Mission {echoMission.Name} has tags on more than one deck. The decks are: {joinedMissionDeckNames}.");
-            }
-
-            Area? area = null;
-            area = missionAreas.GroupBy(i => i).OrderByDescending(grp => grp.Count()).Select(grp => grp.Key).First();
-
-            if (area == null)
-            {
-                return null;
-            }
 
             var missionDefinition = new MissionDefinition
             {
@@ -133,8 +112,32 @@ namespace Api.Services
                 Source = source,
                 Name = echoMission.Name,
                 InstallationCode = echoMission.InstallationCode,
-                Area = area
             };
+
+            if (loadArea == true)
+            {
+                var missionTasks = echoMission.Tags;
+                List<Area?> missionAreas;
+                missionAreas = missionTasks
+                    .Where(t => t.TagId != null)
+                    .Select(t => stidService.GetTagArea(t.TagId, echoMission.InstallationCode).Result)
+                    .ToList();
+
+                var missionDeckNames = missionAreas.Where(a => a != null).Select(a => a!.Deck.Name).Distinct().ToList();
+                if (missionDeckNames.Count > 1)
+                {
+                    string joinedMissionDeckNames = string.Join(", ", [.. missionDeckNames]);
+                    logger.LogWarning($"Mission {echoMission.Name} has tags on more than one deck. The decks are: {joinedMissionDeckNames}.");
+                }
+                Area? area = null;
+                area = missionAreas.GroupBy(i => i).OrderByDescending(grp => grp.Count()).Select(grp => grp.Key).First();
+                if (area == null)
+                {
+                    return null;
+                }
+                missionDefinition.Area = area;
+            }
+
             return missionDefinition;
         }
 
