@@ -2,6 +2,7 @@
 using Api.Controllers.Models;
 using Api.Database.Context;
 using Api.Database.Models;
+using Api.Utilities;
 using Microsoft.EntityFrameworkCore;
 
 namespace Api.Services
@@ -24,6 +25,11 @@ namespace Api.Services
         public abstract Task<Installation?> Delete(string id);
 
         public void DetachTracking(FlotillaDbContext context, Installation installation);
+
+        public void RobotIsOnSameInstallationAsMission(
+            Robot robot,
+            MissionDefinition missionDefinition
+        );
     }
 
     [System.Diagnostics.CodeAnalysis.SuppressMessage(
@@ -38,7 +44,8 @@ namespace Api.Services
     )]
     public class InstallationService(
         FlotillaDbContext context,
-        IAccessRoleService accessRoleService
+        IAccessRoleService accessRoleService,
+        ILogger<InstallationService> logger
     ) : IInstallationService
     {
         public async Task<IEnumerable<Installation>> ReadAll(bool readOnly = true)
@@ -140,6 +147,34 @@ namespace Api.Services
         public void DetachTracking(FlotillaDbContext context, Installation installation)
         {
             context.Entry(installation).State = EntityState.Detached;
+        }
+
+        public void RobotIsOnSameInstallationAsMission(
+            Robot robot,
+            MissionDefinition missionDefinition
+        )
+        {
+            // TODO: MissionDefinition.Installation is required, this if should not be needed
+            // var missionInstallation = await ReadByInstallationCode(
+            //     missionDefinition.InstallationCode,
+            //     readOnly: true
+            // );
+
+            // if (missionInstallation is null)
+            // {
+            //     string errorMessage =
+            //         $"Could not find installation for installation code {missionDefinition.InstallationCode}";
+            //     logger.LogError("{Message}", errorMessage);
+            //     throw new InstallationNotFoundException(errorMessage);
+            // }
+
+            if (robot.CurrentInstallation.Id != missionDefinition.Installation.Id)
+            {
+                string errorMessage =
+                    $"The robot {robot.Name} is on installation {robot.CurrentInstallation.Name} which is not the same as the mission installation {missionDefinition.Installation.Name}";
+                logger.LogError("{Message}", errorMessage);
+                throw new RobotNotInSameInstallationAsMissionException(errorMessage);
+            }
         }
     }
 }

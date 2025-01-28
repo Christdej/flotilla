@@ -35,7 +35,6 @@ namespace Api.Services
         IMissionRunService missionRunService,
         IRobotService robotService,
         IIsarService isarService,
-        ILocalizationService localizationService,
         IReturnToHomeService returnToHomeService,
         ISignalRService signalRService,
         IErrorHandlingService errorHandlingService
@@ -44,10 +43,9 @@ namespace Api.Services
         public async Task StartNextMissionRunIfSystemIsAvailable(Robot robot)
         {
             logger.LogInformation(
-                "Robot {robotName} has status {robotStatus} and current area {areaName}",
+                "Robot {robotName} has status {robotStatus}",
                 robot.Name,
-                robot.Status,
-                robot.CurrentInspectionArea?.Name
+                robot.Status
             );
 
             MissionRun? missionRun;
@@ -82,53 +80,6 @@ namespace Api.Services
                     "Mission {MissionRunId} was put on the queue as the system may not start a mission now",
                     missionRun.Id
                 );
-                return;
-            }
-
-            if (missionRun.InspectionArea == null)
-            {
-                logger.LogWarning(
-                    "Mission {MissionRunId} does not have an inspection area and was therefore not started",
-                    missionRun.Id
-                );
-                return;
-            }
-
-            if (robot.CurrentInspectionArea == null && missionRun.InspectionArea != null)
-            {
-                await robotService.UpdateCurrentInspectionArea(
-                    robot.Id,
-                    missionRun.InspectionArea.Id
-                );
-                robot.CurrentInspectionArea = missionRun.InspectionArea;
-            }
-            else if (
-                !await localizationService.RobotIsOnSameInspectionAreaAsMission(
-                    robot.Id,
-                    missionRun.InspectionArea!.Id
-                )
-            )
-            {
-                logger.LogError(
-                    "Robot {RobotId} is not on the same inspection area as the mission run {MissionRunId}. Aborting all mission runs",
-                    robot.Id,
-                    missionRun.Id
-                );
-                try
-                {
-                    await AbortAllScheduledNormalMissions(
-                        robot.Id,
-                        "Aborted: Robot was at different inspection area"
-                    );
-                }
-                catch (RobotNotFoundException)
-                {
-                    logger.LogError(
-                        "Failed to abort scheduled missions for robot {RobotId}",
-                        robot.Id
-                    );
-                }
-
                 return;
             }
 
@@ -182,7 +133,6 @@ namespace Api.Services
 
             try
             {
-                robot.CurrentInspectionArea ??= missionRun.InspectionArea;
                 await returnToHomeService.ScheduleReturnToHomeMissionRunIfNotAlreadyScheduled(
                     robot
                 );
@@ -373,26 +323,7 @@ namespace Api.Services
                 return;
             }
 
-            Pose robotPose;
-
-            if (robot.CurrentInspectionArea != null)
-            {
-                if (robot.CurrentInspectionArea?.DefaultLocalizationPose == null)
-                {
-                    robotPose = new Pose();
-                }
-                else
-                {
-                    robotPose = robot.CurrentInspectionArea.DefaultLocalizationPose.Pose;
-                }
-            }
-            else
-            {
-                string errorMessage =
-                    $"Robot with ID {robotId} could return home as it did not have an inspection area";
-                logger.LogError("{Message}", errorMessage);
-                throw new InspectionAreaNotFoundException(errorMessage);
-            }
+            Pose robotPose = new();
 
             // Cloning to avoid tracking same object
             var clonedPose = ObjectCopier.Clone(robotPose);
@@ -403,8 +334,9 @@ namespace Api.Services
                 Name = "Return home",
                 Robot = robot,
                 MissionRunType = MissionRunType.Emergency,
-                InstallationCode = robot.CurrentInstallation.InstallationCode,
-                InspectionArea = robot.CurrentInspectionArea!,
+                Installation = robot.CurrentInstallation,
+                // TODO fix
+                // InspectionGroups = robot.CurrentInspectionArea!,
                 Status = MissionStatus.Pending,
                 DesiredStartTime = DateTime.UtcNow,
                 Tasks = new List<MissionTask>([new MissionTask(customTaskQuery)]),
@@ -499,8 +431,8 @@ namespace Api.Services
                     Name = missionRun.Name,
                     Robot = missionRun.Robot,
                     MissionRunType = missionRun.MissionRunType,
-                    InstallationCode = missionRun.InspectionArea!.Installation.InstallationCode,
-                    InspectionArea = missionRun.InspectionArea,
+                    Installation = missionRun.Installation,
+                    InspectionGroups = missionRun.InspectionGroups,
                     Status = MissionStatus.Pending,
                     DesiredStartTime = DateTime.UtcNow,
                     Tasks = unfinishedTasks,

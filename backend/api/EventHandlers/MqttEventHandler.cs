@@ -124,10 +124,9 @@ namespace Api.EventHandlers
             }
 
             _logger.LogInformation(
-                "OnIsarStatus: Robot {robotName} has status {robotStatus} and current inspection area {areaName}",
+                "OnIsarStatus: Robot {robotName} has status {robotStatus}",
                 robot.Name,
-                robot.Status,
-                robot.CurrentInspectionArea?.Name
+                robot.Status
             );
 
             _updateRobotSemaphore.WaitOne();
@@ -146,10 +145,9 @@ namespace Api.EventHandlers
             );
 
             _logger.LogInformation(
-                "OnIsarStatus: Robot {robotName} has status {robotStatus} and current inspection area {areaName}",
+                "OnIsarStatus: Robot {robotName} has status {robotStatus}",
                 robot.Name,
-                robot.Status,
-                robot.CurrentInspectionArea?.Name
+                robot.Status
             );
 
             if (isarStatus.Status == RobotStatus.Available)
@@ -533,7 +531,7 @@ namespace Api.EventHandlers
 
             _ = SignalRService.SendMessageAsync(
                 "Mission run updated",
-                missionRun?.InspectionArea?.Installation,
+                missionRun?.Installation,
                 missionRun != null ? new MissionRunResponse(missionRun) : null
             );
 

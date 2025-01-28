@@ -44,7 +44,7 @@ namespace Api.Services
                 when (ex
                         is RobotNotFoundException
                             or AreaNotFoundException
-                            or InspectionAreaNotFoundException
+                            or InspectionGroupNotFoundException
                             or PoseNotFoundException
                             or UnsupportedRobotCapabilityException
                             or MissionRunNotFoundException
@@ -64,7 +64,7 @@ namespace Api.Services
         private async Task<MissionRun> ScheduleReturnToHomeMissionRun(Robot robot)
         {
             Pose? return_to_home_pose;
-            InspectionArea? currentInspectionArea;
+            InspectionGroup? currentInspectionGroup;
             if (
                 robot.RobotCapabilities is not null
                 && robot.RobotCapabilities.Contains(RobotCapabilitiesEnum.auto_return_to_home)
@@ -74,27 +74,27 @@ namespace Api.Services
                     robot.Id,
                     readOnly: true
                 );
-                currentInspectionArea = previousMissionRun?.InspectionArea;
+                currentInspectionGroup = previousMissionRun?.InspectionGroup;
                 return_to_home_pose =
-                    previousMissionRun?.InspectionArea?.DefaultLocalizationPose?.Pose == null
+                    previousMissionRun?.InspectionGroup?.DefaultLocalizationPose?.Pose == null
                         ? new Pose()
-                        : new Pose(previousMissionRun.InspectionArea.DefaultLocalizationPose.Pose);
+                        : new Pose(previousMissionRun.InspectionGroup.DefaultLocalizationPose.Pose);
             }
             else
             {
-                currentInspectionArea = robot.CurrentInspectionArea;
+                currentInspectionGroup = robot.CurrentInspectionGroup;
                 return_to_home_pose =
-                    robot.CurrentInspectionArea?.DefaultLocalizationPose?.Pose == null
+                    robot.CurrentInspectionGroup?.DefaultLocalizationPose?.Pose == null
                         ? new Pose()
-                        : new Pose(robot.CurrentInspectionArea.DefaultLocalizationPose.Pose);
+                        : new Pose(robot.CurrentInspectionGroup.DefaultLocalizationPose.Pose);
             }
 
-            if (currentInspectionArea == null)
+            if (currentInspectionGroup == null)
             {
                 string errorMessage =
-                    $"Robot with ID {robot.Id} could return home as it did not have an inspection area";
+                    $"Robot with ID {robot.Id} could return home as it did not have an inspection group";
                 logger.LogError("{Message}", errorMessage);
-                throw new InspectionAreaNotFoundException(errorMessage);
+                throw new InspectionGroupNotFoundException(errorMessage);
             }
 
             var returnToHomeMissionRun = new MissionRun
@@ -103,7 +103,7 @@ namespace Api.Services
                 Robot = robot,
                 InstallationCode = robot.CurrentInstallation.InstallationCode,
                 MissionRunType = MissionRunType.ReturnHome,
-                InspectionArea = currentInspectionArea!,
+                InspectionGroup = currentInspectionGroup!,
                 Status = MissionStatus.Pending,
                 DesiredStartTime = DateTime.UtcNow,
                 Tasks = [new(return_to_home_pose, MissionTaskType.ReturnHome)],
@@ -111,9 +111,9 @@ namespace Api.Services
 
             var missionRun = await missionRunService.Create(returnToHomeMissionRun, false);
             logger.LogInformation(
-                "Scheduled a mission for the robot {RobotName} to return to home location on inspection area {InspectionAreaName}",
+                "Scheduled a mission for the robot {RobotName} to return to home location on inspection group {InspectionGroupName}",
                 robot.Name,
-                currentInspectionArea?.Name
+                currentInspectionGroup?.Name
             );
             return missionRun;
         }

@@ -8,37 +8,37 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Api.Services
 {
-    public interface IInspectionAreaService
+    public interface IInspectionGroupService
     {
-        public Task<IEnumerable<InspectionArea>> ReadAll(bool readOnly = true);
+        public Task<IEnumerable<InspectionGroup>> ReadAll(bool readOnly = true);
 
-        public Task<InspectionArea?> ReadById(string id, bool readOnly = true);
+        public Task<InspectionGroup?> ReadById(string id, bool readOnly = true);
 
-        public Task<IEnumerable<InspectionArea>> ReadByInstallation(
+        public Task<IEnumerable<InspectionGroup>> ReadByInstallation(
             string installationCode,
             bool readOnly = true
         );
 
-        public Task<InspectionArea?> ReadByInstallationAndName(
+        public Task<InspectionGroup?> ReadByInstallationAndName(
             string installationCode,
-            string inspectionAreaName,
+            string inspectionGroupName,
             bool readOnly = true
         );
 
-        public Task<InspectionArea?> ReadByInstallationAndPlantAndName(
+        public Task<InspectionGroup?> ReadByInstallationAndPlantAndName(
             Installation installation,
             Plant plant,
-            string inspectionAreaName,
+            string inspectionGroupName,
             bool readOnly = true
         );
 
-        public Task<InspectionArea> Create(CreateInspectionAreaQuery newInspectionArea);
+        public Task<InspectionGroup> Create(CreateInspectionGroupQuery newInspectionGroup);
 
-        public Task<InspectionArea> Update(InspectionArea inspectionArea);
+        public Task<InspectionGroup> Update(InspectionGroup inspectionGroup);
 
-        public Task<InspectionArea?> Delete(string id);
+        public Task<InspectionGroup?> Delete(string id);
 
-        public void DetachTracking(FlotillaDbContext context, InspectionArea inspectionArea);
+        public void DetachTracking(FlotillaDbContext context, InspectionGroup inspectionGroup);
     }
 
     [SuppressMessage(
@@ -51,27 +51,27 @@ namespace Api.Services
         "CA1304:Specify CultureInfo",
         Justification = "Entity framework does not support translating culture info to SQL calls"
     )]
-    public class InspectionAreaService(
+    public class InspectionGroupService(
         FlotillaDbContext context,
         IDefaultLocalizationPoseService defaultLocalizationPoseService,
         IInstallationService installationService,
         IPlantService plantService,
         IAccessRoleService accessRoleService,
         ISignalRService signalRService
-    ) : IInspectionAreaService
+    ) : IInspectionGroupService
     {
-        public async Task<IEnumerable<InspectionArea>> ReadAll(bool readOnly = true)
+        public async Task<IEnumerable<InspectionGroup>> ReadAll(bool readOnly = true)
         {
-            return await GetInspectionAreas(readOnly: readOnly).ToListAsync();
+            return await GetInspectionGroups(readOnly: readOnly).ToListAsync();
         }
 
-        public async Task<InspectionArea?> ReadById(string id, bool readOnly = true)
+        public async Task<InspectionGroup?> ReadById(string id, bool readOnly = true)
         {
-            return await GetInspectionAreas(readOnly: readOnly)
+            return await GetInspectionGroups(readOnly: readOnly)
                 .FirstOrDefaultAsync(a => a.Id.Equals(id));
         }
 
-        public async Task<IEnumerable<InspectionArea>> ReadByInstallation(
+        public async Task<IEnumerable<InspectionGroup>> ReadByInstallation(
             string installationCode,
             bool readOnly = true
         )
@@ -84,38 +84,38 @@ namespace Api.Services
             {
                 return [];
             }
-            return await GetInspectionAreas(readOnly: readOnly)
+            return await GetInspectionGroups(readOnly: readOnly)
                 .Where(a => a.Installation != null && a.Installation.Id.Equals(installation.Id))
                 .ToListAsync();
         }
 
-        public async Task<InspectionArea?> ReadByInstallationAndName(
+        public async Task<InspectionGroup?> ReadByInstallationAndName(
             string installationCode,
-            string inspectionAreaName,
+            string inspectionGroupName,
             bool readOnly = true
         )
         {
-            if (inspectionAreaName == null)
+            if (inspectionGroupName == null)
             {
                 return null;
             }
-            return await GetInspectionAreas(readOnly: readOnly)
+            return await GetInspectionGroups(readOnly: readOnly)
                 .Where(a =>
                     a.Installation != null
                     && a.Installation.InstallationCode.ToLower().Equals(installationCode.ToLower())
-                    && a.Name.ToLower().Equals(inspectionAreaName.ToLower())
+                    && a.Name.ToLower().Equals(inspectionGroupName.ToLower())
                 )
                 .FirstOrDefaultAsync();
         }
 
-        public async Task<InspectionArea?> ReadByInstallationAndPlantAndName(
+        public async Task<InspectionGroup?> ReadByInstallationAndPlantAndName(
             Installation installation,
             Plant plant,
             string name,
             bool readOnly = true
         )
         {
-            return await GetInspectionAreas(readOnly: readOnly)
+            return await GetInspectionGroups(readOnly: readOnly)
                 .Where(a =>
                     a.Plant != null
                     && a.Plant.Id.Equals(plant.Id)
@@ -128,114 +128,116 @@ namespace Api.Services
                 .FirstOrDefaultAsync();
         }
 
-        public async Task<InspectionArea> Create(CreateInspectionAreaQuery newInspectionAreaQuery)
+        public async Task<InspectionGroup> Create(
+            CreateInspectionGroupQuery newInspectionGroupQuery
+        )
         {
             var installation =
                 await installationService.ReadByInstallationCode(
-                    newInspectionAreaQuery.InstallationCode,
+                    newInspectionGroupQuery.InstallationCode,
                     readOnly: true
                 )
                 ?? throw new InstallationNotFoundException(
-                    $"No installation with name {newInspectionAreaQuery.InstallationCode} could be found"
+                    $"No installation with name {newInspectionGroupQuery.InstallationCode} could be found"
                 );
             var plant =
                 await plantService.ReadByInstallationAndPlantCode(
                     installation,
-                    newInspectionAreaQuery.PlantCode,
+                    newInspectionGroupQuery.PlantCode,
                     readOnly: true
                 )
                 ?? throw new PlantNotFoundException(
-                    $"No plant with name {newInspectionAreaQuery.PlantCode} could be found"
+                    $"No plant with name {newInspectionGroupQuery.PlantCode} could be found"
                 );
-            var existingInspectionArea = await ReadByInstallationAndPlantAndName(
+            var existingInspectionGroup = await ReadByInstallationAndPlantAndName(
                 installation,
                 plant,
-                newInspectionAreaQuery.Name,
+                newInspectionGroupQuery.Name,
                 readOnly: true
             );
 
-            if (existingInspectionArea != null)
+            if (existingInspectionGroup != null)
             {
-                throw new InspectionAreaExistsException(
-                    $"Inspection are with name {newInspectionAreaQuery.Name} already exists"
+                throw new InspectionGroupExistsException(
+                    $"Inspection are with name {newInspectionGroupQuery.Name} already exists"
                 );
             }
 
             DefaultLocalizationPose? defaultLocalizationPose = null;
-            if (newInspectionAreaQuery.DefaultLocalizationPose != null)
+            if (newInspectionGroupQuery.DefaultLocalizationPose != null)
             {
                 defaultLocalizationPose = await defaultLocalizationPoseService.Create(
                     new DefaultLocalizationPose(
-                        newInspectionAreaQuery.DefaultLocalizationPose.Value.Pose,
-                        newInspectionAreaQuery.DefaultLocalizationPose.Value.IsDockingStation
+                        newInspectionGroupQuery.DefaultLocalizationPose.Value.Pose,
+                        newInspectionGroupQuery.DefaultLocalizationPose.Value.IsDockingStation
                     )
                 );
             }
 
-            var inspectionArea = new InspectionArea
+            var inspectionGroup = new InspectionGroup
             {
-                Name = newInspectionAreaQuery.Name,
+                Name = newInspectionGroupQuery.Name,
                 Installation = installation,
                 Plant = plant,
                 DefaultLocalizationPose = defaultLocalizationPose,
             };
 
-            context.Entry(inspectionArea.Installation).State = EntityState.Unchanged;
-            context.Entry(inspectionArea.Plant).State = EntityState.Unchanged;
-            if (inspectionArea.DefaultLocalizationPose is not null)
+            context.Entry(inspectionGroup.Installation).State = EntityState.Unchanged;
+            context.Entry(inspectionGroup.Plant).State = EntityState.Unchanged;
+            if (inspectionGroup.DefaultLocalizationPose is not null)
             {
-                context.Entry(inspectionArea.DefaultLocalizationPose).State = EntityState.Modified;
+                context.Entry(inspectionGroup.DefaultLocalizationPose).State = EntityState.Modified;
             }
 
-            await context.InspectionAreas.AddAsync(inspectionArea);
-            await ApplyDatabaseUpdate(inspectionArea.Installation);
+            await context.InspectionGroups.AddAsync(inspectionGroup);
+            await ApplyDatabaseUpdate(inspectionGroup.Installation);
             _ = signalRService.SendMessageAsync(
-                "InspectionArea created",
-                inspectionArea.Installation,
-                new InspectionAreaResponse(inspectionArea)
+                "InspectionGroup created",
+                inspectionGroup.Installation,
+                new InspectionGroupResponse(inspectionGroup)
             );
-            DetachTracking(context, inspectionArea);
-            return inspectionArea!;
+            DetachTracking(context, inspectionGroup);
+            return inspectionGroup!;
         }
 
-        public async Task<InspectionArea> Update(InspectionArea inspectionArea)
+        public async Task<InspectionGroup> Update(InspectionGroup inspectionGroup)
         {
-            var entry = context.Update(inspectionArea);
-            await ApplyDatabaseUpdate(inspectionArea.Installation);
+            var entry = context.Update(inspectionGroup);
+            await ApplyDatabaseUpdate(inspectionGroup.Installation);
             _ = signalRService.SendMessageAsync(
-                "InspectionArea updated",
-                inspectionArea.Installation,
-                new InspectionAreaResponse(inspectionArea)
+                "InspectionGroup updated",
+                inspectionGroup.Installation,
+                new InspectionGroupResponse(inspectionGroup)
             );
-            DetachTracking(context, inspectionArea);
+            DetachTracking(context, inspectionGroup);
             return entry.Entity;
         }
 
-        public async Task<InspectionArea?> Delete(string id)
+        public async Task<InspectionGroup?> Delete(string id)
         {
-            var inspectionArea = await GetInspectionAreas()
+            var inspectionGroup = await GetInspectionGroups()
                 .FirstOrDefaultAsync(ev => ev.Id.Equals(id));
-            if (inspectionArea is null)
+            if (inspectionGroup is null)
             {
                 return null;
             }
 
-            context.InspectionAreas.Remove(inspectionArea);
-            await ApplyDatabaseUpdate(inspectionArea.Installation);
+            context.InspectionGroups.Remove(inspectionGroup);
+            await ApplyDatabaseUpdate(inspectionGroup.Installation);
             _ = signalRService.SendMessageAsync(
-                "InspectionArea deleted",
-                inspectionArea.Installation,
-                new InspectionAreaResponse(inspectionArea)
+                "InspectionGroup deleted",
+                inspectionGroup.Installation,
+                new InspectionGroupResponse(inspectionGroup)
             );
 
-            return inspectionArea;
+            return inspectionGroup;
         }
 
-        private IQueryable<InspectionArea> GetInspectionAreas(bool readOnly = true)
+        private IQueryable<InspectionGroup> GetInspectionGroups(bool readOnly = true)
         {
             var accessibleInstallationCodes = accessRoleService.GetAllowedInstallationCodes();
             var query = context
-                .InspectionAreas.Include(p => p.Plant)
+                .InspectionGroups.Include(p => p.Plant)
                 .ThenInclude(p => p.Installation)
                 .Include(i => i.Installation)
                 .Include(d => d.DefaultLocalizationPose)
@@ -260,32 +262,32 @@ namespace Api.Services
                 await context.SaveChangesAsync();
             else
                 throw new UnauthorizedAccessException(
-                    $"User does not have permission to update inspection area in installation {installation.Name}"
+                    $"User does not have permission to update inspection Group in installation {installation.Name}"
                 );
         }
 
-        public void DetachTracking(FlotillaDbContext context, InspectionArea inspectionArea)
+        public void DetachTracking(FlotillaDbContext context, InspectionGroup inspectionGroup)
         {
             if (
-                inspectionArea.Installation != null
-                && context.Entry(inspectionArea.Installation).State != EntityState.Detached
+                inspectionGroup.Installation != null
+                && context.Entry(inspectionGroup.Installation).State != EntityState.Detached
             )
-                installationService.DetachTracking(context, inspectionArea.Installation);
+                installationService.DetachTracking(context, inspectionGroup.Installation);
             if (
-                inspectionArea.Plant != null
-                && context.Entry(inspectionArea.Plant).State != EntityState.Detached
+                inspectionGroup.Plant != null
+                && context.Entry(inspectionGroup.Plant).State != EntityState.Detached
             )
-                plantService.DetachTracking(context, inspectionArea.Plant);
+                plantService.DetachTracking(context, inspectionGroup.Plant);
             if (
-                inspectionArea.DefaultLocalizationPose != null
-                && context.Entry(inspectionArea.DefaultLocalizationPose).State
+                inspectionGroup.DefaultLocalizationPose != null
+                && context.Entry(inspectionGroup.DefaultLocalizationPose).State
                     != EntityState.Detached
             )
                 defaultLocalizationPoseService.DetachTracking(
                     context,
-                    inspectionArea.DefaultLocalizationPose
+                    inspectionGroup.DefaultLocalizationPose
                 );
-            context.Entry(inspectionArea).State = EntityState.Detached;
+            context.Entry(inspectionGroup).State = EntityState.Detached;
         }
     }
 }

@@ -15,8 +15,7 @@ namespace Api.Test.Database
     {
         private readonly AccessRoleService _accessRoleService;
         private readonly MissionTaskService _missionTaskService;
-        private readonly AreaService _areaService;
-        private readonly InspectionAreaService _inspectionAreaService;
+        private readonly InspectionGroupService _inspectionGroupService;
         private readonly InstallationService _installationService;
         private readonly MissionRunService _missionRunService;
         private readonly PlantService _plantService;
@@ -35,27 +34,23 @@ namespace Api.Test.Database
             var defaultLocalizationPoseService = new DefaultLocalizationPoseService(context);
 
             _accessRoleService = new AccessRoleService(context, new HttpContextAccessor());
-            _installationService = new InstallationService(context, _accessRoleService);
+            _installationService = new InstallationService(
+                context,
+                _accessRoleService,
+                new Mock<ILogger<InstallationService>>().Object
+            );
             _missionTaskService = new MissionTaskService(
                 context,
                 new Mock<ILogger<MissionTaskService>>().Object
             );
             _plantService = new PlantService(context, _installationService, _accessRoleService);
-            _inspectionAreaService = new InspectionAreaService(
+            _inspectionGroupService = new InspectionGroupService(
                 context,
                 defaultLocalizationPoseService,
                 _installationService,
                 _plantService,
                 _accessRoleService,
                 new MockSignalRService()
-            );
-            _areaService = new AreaService(
-                context,
-                _installationService,
-                _plantService,
-                _inspectionAreaService,
-                defaultLocalizationPoseService,
-                _accessRoleService
             );
             _userInfoService = new UserInfoService(
                 context,
@@ -69,8 +64,7 @@ namespace Api.Test.Database
                 _robotModelService,
                 new MockSignalRService(),
                 _accessRoleService,
-                _installationService,
-                _inspectionAreaService
+                _installationService
             );
             _missionRunService = new MissionRunService(
                 context,
@@ -78,7 +72,7 @@ namespace Api.Test.Database
                 new Mock<ILogger<MissionRunService>>().Object,
                 _accessRoleService,
                 _missionTaskService,
-                _inspectionAreaService,
+                _inspectionGroupService,
                 _robotService,
                 _userInfoService
             );
