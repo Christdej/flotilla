@@ -33,7 +33,11 @@ namespace Api.Test.Database
         public DatabaseUtilities(FlotillaDbContext context)
         {
             _accessRoleService = new AccessRoleService(context, new HttpContextAccessor());
-            _installationService = new InstallationService(context, _accessRoleService);
+            _installationService = new InstallationService(
+                context,
+                _accessRoleService,
+                new Mock<ILogger<InstallationService>>().Object
+            );
             _missionTaskService = new MissionTaskService(
                 context,
                 new Mock<ILogger<MissionTaskService>>().Object

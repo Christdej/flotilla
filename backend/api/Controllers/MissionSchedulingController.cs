@@ -20,7 +20,6 @@ namespace Api.Controllers
         ILogger<MissionSchedulingController> logger,
         IMapService mapService,
         IStidService stidService,
-        ILocalizationService localizationService,
         IRobotService robotService,
         ISourceService sourceService,
         IInspectionAreaService inspectionAreaService
@@ -173,7 +172,7 @@ namespace Api.Controllers
 
             try
             {
-                await localizationService.EnsureRobotIsOnSameInstallationAsMission(
+                await installationService.EnsureRobotIsOnSameInstallationAsMission(
                     robot,
                     missionDefinition
                 );
@@ -361,6 +360,18 @@ namespace Api.Controllers
                 return NotFound($"No area found for mission '{missionDefinition.Name}'.");
             }
 
+            if (
+                !inspectionAreaService.MissionTasksAreInsideInspectionAreaPolygon(
+                    missionTasks,
+                    area.InspectionArea
+                )
+            )
+            {
+                return Conflict(
+                    $"The tasks of the mission are not inside the inspection area of the robot"
+                );
+            }
+
             var source = await sourceService.CheckForExistingSource(
                 scheduledMissionQuery.MissionSourceId
             );
@@ -434,19 +445,6 @@ namespace Api.Controllers
             if (existingMissionDefinition == null)
             {
                 await missionDefinitionService.Create(scheduledMissionDefinition);
-            }
-
-            if (
-                missionRun.Robot.CurrentInspectionArea != null
-                && !await localizationService.RobotIsOnSameInspectionAreaAsMission(
-                    missionRun.Robot.Id,
-                    missionRun.InspectionArea!.Id
-                )
-            )
-            {
-                return Conflict(
-                    $"The robot {missionRun.Robot.Name} is assumed to be in a different inspection area so the mission was not scheduled."
-                );
             }
 
             MissionRun newMissionRun;
@@ -535,6 +533,18 @@ namespace Api.Controllers
                     );
                 }
 
+                if (
+                    !inspectionAreaService.MissionTasksAreInsideInspectionAreaPolygon(
+                        missionTasks,
+                        inspectionArea
+                    )
+                )
+                {
+                    return Conflict(
+                        $"The tasks of the mission are not inside the inspection area of the robot"
+                    );
+                }
+
                 var source = await sourceService.CheckForExistingSourceFromTasks(missionTasks);
 
                 MissionDefinition? existingMissionDefinition = null;
@@ -598,7 +608,7 @@ namespace Api.Controllers
 
             try
             {
-                await localizationService.EnsureRobotIsOnSameInstallationAsMission(
+                await installationService.EnsureRobotIsOnSameInstallationAsMission(
                     robot,
                     customMissionDefinition
                 );
@@ -633,29 +643,6 @@ namespace Api.Controllers
                 if (scheduledMission.Tasks.Any())
                 {
                     scheduledMission.SetEstimatedTaskDuration();
-                }
-                else if (
-                    scheduledMission.Robot.CurrentInspectionArea != null
-                    && !await localizationService.RobotIsOnSameInspectionAreaAsMission(
-                        scheduledMission.Robot.Id,
-                        scheduledMission.InspectionArea.Id
-                    )
-                )
-                {
-                    scheduledMission.SetEstimatedTaskDuration();
-                }
-
-                if (
-                    scheduledMission.Robot.CurrentInspectionArea != null
-                    && !await localizationService.RobotIsOnSameInspectionAreaAsMission(
-                        scheduledMission.Robot.Id,
-                        scheduledMission.InspectionArea.Id
-                    )
-                )
-                {
-                    return Conflict(
-                        $"The robot {scheduledMission.Robot.Name} is assumed to be in a different inspection area so the mission was not scheduled."
-                    );
                 }
 
                 newMissionRun = await missionRunService.Create(scheduledMission);

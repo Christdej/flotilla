@@ -1,4 +1,5 @@
-﻿using Api.Controllers.Models;
+﻿using System.Text.Json;
+using Api.Controllers.Models;
 using Api.Database.Models;
 using Api.Services;
 using Azure;
@@ -148,6 +149,45 @@ namespace Api.Controllers
             {
                 logger.LogError(e, "Error during GET of inspection area missions from database");
                 throw;
+            }
+        }
+
+        /// <summary>
+        /// Update the inspection area json polygon
+        /// </summary>
+        [HttpPatch]
+        [Authorize(Roles = Role.Any)]
+        [Route("{inspectionAreaId}/area-polygon")]
+        [ProducesResponseType(typeof(ActionResult<InspectionArea>), StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+        [ProducesResponseType(StatusCodes.Status403Forbidden)]
+        [ProducesResponseType(StatusCodes.Status404NotFound)]
+        [ProducesResponseType(StatusCodes.Status500InternalServerError)]
+        public async Task<ActionResult<InspectionArea>> UpdateInspectionAreaJsonPolygon(
+            [FromRoute] string inspectionAreaId,
+            [FromBody] InspectionAreaPolygon areaPolygonJson
+        )
+        {
+            try
+            {
+                var inspectionArea = await inspectionAreaService.ReadById(
+                    inspectionAreaId,
+                    readOnly: true
+                );
+                if (inspectionArea == null)
+                    return NotFound($"Could not find inspection area with id {inspectionAreaId}");
+
+                var jsonString = JsonSerializer.Serialize(areaPolygonJson);
+                var updatedInspectionArea = await inspectionAreaService.UpdateAreaPolygon(
+                    inspectionArea,
+                    jsonString
+                );
+                return Ok(inspectionArea);
+            }
+            catch (Exception e)
+            {
+                logger.LogError(e, "Error during updating inspection area polygon");
+                return StatusCode(StatusCodes.Status500InternalServerError);
             }
         }
 

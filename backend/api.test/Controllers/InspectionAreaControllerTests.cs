@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Net;
 using System.Net.Http;
 using System.Net.Http.Json;
 using System.Text.Json;
@@ -151,6 +152,159 @@ namespace Api.Test.Controllers
                     m.Id.Equals(mission!.MissionId, StringComparison.Ordinal)
                 )
             );
+        }
+
+        [Fact]
+        public async Task TestUpdatingInspectionAreaPolygon()
+        {
+            // Arrange
+            var installation = await DatabaseUtilities.NewInstallation();
+            var plant = await DatabaseUtilities.NewPlant(installation.InstallationCode);
+            var inspectionArea = await DatabaseUtilities.NewInspectionArea(
+                installation.InstallationCode,
+                plant.PlantCode
+            );
+
+            // var jsonString =
+            //     @"{
+            //     ""polygon_xy"": [
+            //         [
+            //             302.5531995863935,
+            //             261.6184268096447
+            //         ],
+            //         [
+            //             208.34336421563663,
+            //             261.8438265901957
+            //         ],
+            //         [
+            //             208.005290643732,
+            //             266.57722198176793
+            //         ],
+            //         [
+            //             302.5738578052171,
+            //             266.1377994017247
+            //         ]
+            //     ],
+            //     ""zmin"": 103.40445742972376,
+            //     ""zmax"": 116.6302581993386
+            // }";
+
+            var jsonString =
+                @"{
+                    ""zmin"": 103.40445742972376,
+                    ""zmax"": 116.6302581993386,
+                    ""positions"": [
+                        { ""x"": 302.5531995863935, ""y"": 261.6184268096447 },
+                        { ""x"": 208.34336421563663, ""y"": 261.8438265901957 },
+                        { ""x"": 208.005290643732, ""y"": 266.57722198176793 },
+                        { ""x"": 302.5738578052171, ""y"": 266.1377994017247 }
+                    ]
+                }";
+            //         public struct InspectionAreaPolygon
+            // {
+            //     public double ZMin { get; set; }
+            //     public double ZMax { get; set; }
+            //     public List<XYPosition> Positions { get; set; }
+            // }
+
+            // public struct XYPosition
+            // {
+            //     public double X { get; set; }
+            //     public double Y { get; set; }
+            // }
+
+            var content = new StringContent(jsonString, null, "application/json");
+
+            // Act
+            var response = await Client.PatchAsync(
+                $"/inspectionAreas/{inspectionArea.Id}/area-polygon",
+                content
+            );
+            var inspectionAreaResponse = await response.Content.ReadFromJsonAsync<InspectionArea>(
+                SerializerOptions
+            );
+
+            // Assert
+            Assert.True(response.IsSuccessStatusCode);
+            Assert.Equal(jsonString, inspectionAreaResponse!.AreaPolygonJson!);
+        }
+
+        [Fact]
+        public async Task ScheduleMissionOutsideInspectionAreaPolygonFails()
+        {
+            // Arrange
+            var installation = await DatabaseUtilities.NewInstallation();
+            var plant = await DatabaseUtilities.NewPlant(installation.InstallationCode);
+            var inspectionArea = await DatabaseUtilities.NewInspectionArea(
+                installation.InstallationCode,
+                plant.PlantCode
+            );
+            var jsonString =
+                @"{
+                    ""zmin"": 0,
+                    ""zmax"": 10,
+                    ""positions"": [
+                        { ""x"": 0, ""y"": 0 },
+                        { ""x"": 0, ""y"": 10 },
+                        { ""x"": 10, ""y"": 10 },
+                        { ""x"": 10, ""y"": 0 }
+                    ]
+                }";
+
+            var content = new StringContent(jsonString, null, "application/json");
+            var response = await Client.PatchAsync(
+                $"/inspectionAreas/{inspectionArea.Id}/area-polygon",
+                content
+            );
+            // var inspectionAreaResponse = await response.Content.ReadFromJsonAsync<InspectionArea>(
+            //     SerializerOptions
+            // );
+
+            Assert.True(response.IsSuccessStatusCode);
+
+            var robot = await DatabaseUtilities.NewRobot(RobotStatus.Available, installation);
+
+            var inspection = new CustomInspectionQuery
+            {
+                AnalysisType = AnalysisType.CarSeal,
+                InspectionTarget = new Position(),
+                InspectionType = InspectionType.Image,
+            };
+            var tasks = new List<CustomTaskQuery>
+            {
+                new()
+                {
+                    Inspection = inspection,
+                    TagId = "test",
+                    RobotPose = new Pose(11, 11, 11, 0, 0, 0, 1), // Position outside polygon
+                    TaskOrder = 0,
+                },
+            };
+            var missionQuery = new CustomMissionQuery
+            {
+                RobotId = robot.Id,
+                DesiredStartTime = DateTime.UtcNow,
+                InstallationCode = installation.InstallationCode,
+                InspectionAreaName = inspectionArea.Name,
+                Name = "TestMission",
+                Tasks = tasks,
+            };
+
+            var missionContent = new StringContent(
+                JsonSerializer.Serialize(missionQuery),
+                null,
+                "application/json"
+            );
+
+            // Act
+            var missionResponse = await Client.PostAsync("/missions/custom", missionContent);
+            // var userMissionResponse = await missionResponse.Content.ReadFromJsonAsync<MissionRun>(
+            //     SerializerOptions
+            // );
+            // var mission = await MissionRunService.ReadById(userMissionResponse!.Id);
+
+            // Assert
+            Assert.Equal(HttpStatusCode.Conflict, missionResponse.StatusCode);
         }
     }
 }

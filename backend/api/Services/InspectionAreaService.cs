@@ -1,5 +1,6 @@
 ﻿using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
+using System.Text.Json;
 using Api.Controllers.Models;
 using Api.Database.Context;
 using Api.Database.Models;
@@ -30,6 +31,16 @@ namespace Api.Services
             Plant plant,
             string inspectionAreaName,
             bool readOnly = true
+        );
+
+        public Task<InspectionArea> UpdateAreaPolygon(
+            InspectionArea inspectionArea,
+            string areaPolygonJson
+        );
+
+        public bool MissionTasksAreInsideInspectionAreaPolygon(
+            List<MissionTask> missionTasks,
+            InspectionArea inspectionArea
         );
 
         public Task<InspectionArea> Create(CreateInspectionAreaQuery newInspectionArea);
@@ -126,6 +137,125 @@ namespace Api.Services
                 .Include(i => i.Installation)
                 .FirstOrDefaultAsync();
         }
+
+        public Task<InspectionArea> UpdateAreaPolygon(
+            InspectionArea inspectionArea,
+            string areaPolygonJson
+        )
+        {
+            inspectionArea.AreaPolygonJson = areaPolygonJson;
+            return Update(inspectionArea);
+        }
+
+        public bool MissionTasksAreInsideInspectionAreaPolygon(
+            List<MissionTask> missionTasks,
+            InspectionArea inspectionArea
+        )
+        {
+            if (string.IsNullOrEmpty(inspectionArea.AreaPolygonJson))
+            {
+                return false;
+            }
+
+            var inspectionAreaPolygon = JsonSerializer.Deserialize<InspectionAreaPolygon>(
+                inspectionArea.AreaPolygonJson
+            );
+
+            var inspectionAreaPositions = inspectionAreaPolygon.Positions;
+            var inspectionAreaZMin = inspectionAreaPolygon.ZMin;
+            var inspectionAreaZMax = inspectionAreaPolygon.ZMax;
+            foreach (var missionTask in missionTasks)
+            {
+                var robotPosition = missionTask.RobotPose.Position;
+                if (
+                    !IsPositionInsidePolygon(
+                        inspectionAreaPositions,
+                        robotPosition,
+                        inspectionAreaZMin,
+                        inspectionAreaZMax
+                    )
+                )
+                {
+                    return false;
+                }
+            }
+
+            return true;
+        }
+
+        private static bool IsPositionInsidePolygon(
+            List<XYPosition> polygon,
+            Position position,
+            double zMin,
+            double zMax
+        )
+        {
+            var x = position.X;
+            var y = position.Y;
+            var z = position.Z;
+
+            if (z < zMin || z > zMax)
+            {
+                return false;
+            }
+
+            // Ray-casting algorithm for checking if the point is inside the polygon
+            var inside = false;
+            for (int i = 0, j = polygon.Count - 1; i < polygon.Count; j = i++)
+            {
+                var xi = polygon[i].X;
+                var yi = polygon[i].Y;
+                var xj = polygon[j].X;
+                var yj = polygon[j].Y;
+
+                var intersect =
+                    ((yi > y) != (yj > y)) && (x < (xj - xi) * (y - yi) / (yj - yi) + xi);
+                if (intersect)
+                {
+                    inside = !inside;
+                }
+            }
+
+            return inside;
+        }
+
+        // public static bool IsPointInPolygon4(
+        //     List<XYPosition> polygon,
+        //     Position position,
+        //     double zMin,
+        //     double zMax
+        // )
+        // {
+        //     var x = position.X;
+        //     var y = position.Y;
+        //     var z = position.Z;
+
+        //     if (z < zMin || z > zMax)
+        //     {
+        //         return false;
+        //     }
+
+        //     bool result = false;
+        //     int j = polygon.Count - 1;
+        //     for (int i = 0; i < polygon.Count; i++)
+        //     {
+        //         if (polygon[i].Y < y && polygon[j].Y >= y || polygon[j].Y < y && polygon[i].Y >= y)
+        //         {
+        //             if (
+        //                 polygon[i].X
+        //                     + (y - polygon[i].Y)
+        //                         / (polygon[j].Y - polygon[i].Y)
+        //                         * (polygon[j].X - polygon[i].X)
+        //                 < x
+        //             )
+        //             {
+        //                 result = !result;
+        //             }
+        //         }
+        //         j = i;
+        //     }
+        //     return result;
+        // }
 
         public async Task<InspectionArea> Create(CreateInspectionAreaQuery newInspectionAreaQuery)
         {
@@ -260,5 +390,18 @@ namespace Api.Services
                 plantService.DetachTracking(context, inspectionArea.Plant);
             context.Entry(inspectionArea).State = EntityState.Detached;
         }
+    }
+
+    public struct InspectionAreaPolygon
+    {
+        public double ZMin { get; set; }
+        public double ZMax { get; set; }
+        public List<XYPosition> Positions { get; set; }
+    }
+
+    public struct XYPosition
+    {
+        public double X { get; set; }
+        public double Y { get; set; }
     }
 }
