@@ -191,6 +191,7 @@ namespace Api.Controllers
             if (missionTasks == null)
                 return NotFound("No mission tasks were found for the requested mission");
 
+
             var missionRun = new MissionRun
             {
                 Name = missionDefinition.Name,
