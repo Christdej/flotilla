@@ -44,21 +44,37 @@ const StyledContent = styled.div`
     gap: 80px;
 `
 
-const handleLogin = (instance: IPublicClientApplication) => {
-    instance.loginRedirect(loginRequest).catch((e) => {
-        console.error(e)
-    })
+const handleLogin = async (instance: IPublicClientApplication) => {
+    try {
+        await instance.loginRedirect(loginRequest)
+    } catch (error: any) {
+        console.error('Login error:', error)
+    }
 }
 
 export const AssetSelectionPage = () => {
     const isAuthenticated = useIsAuthenticated()
     const { instance, inProgress } = useMsal()
+    const [hasTriedLogin, setHasTriedLogin] = useState(false)
 
     useEffect(() => {
-        if (!isAuthenticated && inProgress === InteractionStatus.None) {
+        if (!isAuthenticated && inProgress === InteractionStatus.None && !hasTriedLogin) {
+            setHasTriedLogin(true)
             handleLogin(instance)
         }
-    }, [isAuthenticated, inProgress, instance])
+    }, [isAuthenticated, inProgress, instance, hasTriedLogin])
+
+    // Show loading while authentication is in progress
+    if (inProgress !== InteractionStatus.None) {
+        return (
+            <Centered>
+                <Typography variant="body_long_bold" color="primary">
+                    Authentication in progress...
+                </Typography>
+                <CircularProgress size={48} />
+            </Centered>
+        )
+    }
 
     return (
         <>

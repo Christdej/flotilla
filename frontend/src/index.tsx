@@ -18,24 +18,14 @@ msalInstance
         if (!tokenResponse) {
             const accounts = msalInstance.getAllAccounts()
             if (accounts.length === 0) {
-                msalInstance.loginRedirect().catch((error) => {
-                    if (error.errorCode === 'interaction_in_progress') {
-                        console.log('Authentication already in progress')
-                    } else {
-                        console.error('Login failed:', error)
-                    }
-                })
+                console.log('No accounts found, will redirect from AssetSelectionPage')
             }
         } else {
             console.log('User authenticated successfully')
         }
     })
     .catch((err) => {
-        if (err.errorCode === 'interaction_in_progress') {
-            console.log('Authentication flow already in progress')
-        } else {
-            console.error('Authentication error:', err)
-        }
+        console.error('Authentication error:', err)
     })
 
 const rootElement = document.getElementById('root')
